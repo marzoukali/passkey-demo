@@ -1,0 +1,17 @@
+{
+  "name": "passkey-demo",
+  "version": "1.0.0",
+  "description": "A small demo of passkey sign-in built with SimpleWebAuthn",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@simplewebauthn/browser": "^14.0.0",
+    "@simplewebauthn/server": "^14.0.3"
+  }
+}

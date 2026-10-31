@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en-IE">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Passkey Demo</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/styles.css">
+  <script src="/simplewebauthn-browser.js" defer></script>
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Passkey demo</h1>
+      <p>Sign up and sign in with your fingerprint, face, phone or a security key. No password exists anywhere in this app.</p>
+    </header>
+
+    <div class="tabs" role="tablist" aria-label="Demo sections">
+      <button id="tab-try" type="button" role="tab" aria-selected="true" aria-controls="panel-try">Try it</button>
+      <button id="tab-explained" type="button" role="tab" aria-selected="false" aria-controls="panel-explained" tabindex="-1">Explained</button>
+    </div>
+
+    <div id="panel-try" class="panel" role="tabpanel" aria-labelledby="tab-try">
+      <p id="support" class="bad"></p>
+
+      <section>
+        <h2>1. Create an account</h2>
+        <p>Your device makes a key pair. The private key stays with you, and only the public key goes to the server.</p>
+        <form id="register">
+          <input id="username" placeholder="Pick any username" autocomplete="off" maxlength="64" aria-label="Username">
+          <button type="submit">Create passkey</button>
+        </form>
+        <div class="row">
+          <span id="register-status" class="status" role="status"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>2. Sign in</h2>
+        <p>No username to type. The server sends a one-time challenge and your device signs it.</p>
+        <div class="row">
+          <button id="login" type="button">Sign in with a passkey</button>
+          <span id="login-status" class="status" role="status"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>3. Try to cheat</h2>
+        <p>Pretend an attacker captured your last sign-in and sends it again. It should be refused, because every sign-in signs a new challenge.</p>
+        <div class="row">
+          <button id="replay" type="button" disabled>Replay last sign-in</button>
+          <span id="replay-status" class="status" role="status"></span>
+        </div>
+      </section>
+
+      <section>
+        <h2>What the server stores</h2>
+        <p>Everything it holds about you. If this leaked, there would be no password to crack or reuse.</p>
+        <pre id="state">Nothing yet</pre>
+      </section>
+
+      <section>
+        <h2>What just happened</h2>
+        <ol id="log"></ol>
+      </section>
+    </div>
+
+    <div id="panel-explained" class="panel explained" role="tabpanel" aria-labelledby="tab-explained" hidden>
+      <section>
+        <h2>The short version</h2>
+        <table>
+          <thead>
+            <tr><th scope="col">Name</th><th scope="col">Think of it as</th><th scope="col">Its job</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">FIDO</th><td>The agreed design for locks and keys</td><td>Writes the open rules for signing in without passwords</td></tr>
+            <tr><th scope="row">Passkey</th><td>A key that fits only one door</td><td>Proves this account is yours</td></tr>
+            <tr><th scope="row">Digital wallet</th><td>The wallet in your pocket, on your phone</td><td>Holds your cards, tickets and ID</td></tr>
+            <tr><th scope="row">SimpleWebAuthn</th><td>A locksmith's toolkit</td><td>Helps developers add passkeys to a website</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section>
+        <h2>This demo</h2>
+        <p>You play the user, and the page shows you what the website's server does behind the scenes.</p>
+        <dl>
+          <dt>Create an account</dt>
+          <dd>Your device makes two matching keys. The private key stays on your device, and the public key goes to the server. It's like giving a website a lock that only your key can open.</dd>
+          <dt>Sign in</dt>
+          <dd>The server sends a random one-time code, called a challenge. After your fingerprint, face or PIN, your device signs it with the private key. The server checks the signature with the public key, so the private key is never sent.</dd>
+          <dt>Try to cheat</dt>
+          <dd>This sends your old signature again, as an attacker might. Each sign-in has a new challenge, so the old signature doesn't match and the server refuses it.</dd>
+          <dt>What the server stores</dt>
+          <dd>Your username, the public key and a few details about the passkey. A public key can't be used to sign in, so there is no password to steal.</dd>
+        </dl>
+        <p>The demo keeps accounts in memory, so it forgets them when the server restarts. It shows passkeys only, and it doesn't use a digital wallet.</p>
+      </section>
+
+      <section>
+        <h2>FIDO</h2>
+        <p>FIDO stands for Fast IDentity Online. The FIDO Alliance is a group of companies and organisations that writes shared rules for signing in without passwords. The rules are open and free to use.</p>
+        <p>Think of it as an agreed design for locks and keys. Because everyone follows the same design, passkeys work across the major operating systems, browsers and password managers.</p>
+        <h3>Names you may see</h3>
+        <dl>
+          <dt>FIDO2</dt>
+          <dd>The standard behind passkeys. It has the two parts below.</dd>
+          <dt>WebAuthn</dt>
+          <dd>How a website talks to your browser. SimpleWebAuthn makes this part easier for developers.</dd>
+          <dt>CTAP</dt>
+          <dd>How your browser talks to a phone or security key.</dd>
+        </dl>
+      </section>
+
+      <section>
+        <h2>Passkeys</h2>
+        <p>A passkey replaces your password. It's a secret kept on your device, and you unlock it the same way you unlock your device: with your fingerprint, face or PIN.</p>
+        <p>Your fingerprint or face is not sent to the website. It only unlocks the passkey on your device.</p>
+        <table>
+          <thead>
+            <tr><th scope="col">Situation</th><th scope="col">Password</th><th scope="col">Passkey</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Signing in</th><td>You type a secret and send it to the site</td><td>The secret stays on your device</td></tr>
+            <tr><th scope="row">Many sites</th><td>People often reuse the same one</td><td>Each site gets its own, automatically</td></tr>
+            <tr><th scope="row">Fake website</th><td>You can be tricked into typing it</td><td>Your browser won't use it on the wrong site</td></tr>
+            <tr><th scope="row">Site is hacked</th><td>Password data can be stolen</td><td>Thieves get only public keys</td></tr>
+          </tbody>
+        </table>
+        <h3>Two kinds of passkey</h3>
+        <dl>
+          <dt>Synced</dt>
+          <dd>Copied to your other devices through an account such as iCloud Keychain or Google Password Manager. If you lose your phone, your other devices still have it.</dd>
+          <dt>Device-bound</dt>
+          <dd>Stays on one device, such as a security key. It offers the strongest protection, but you need a backup plan in case you lose it.</dd>
+        </dl>
+        <p>You can see which kind you made in the <code>backedUp</code> field on the Try it tab. <code>true</code> means it's synced.</p>
+      </section>
+
+      <section>
+        <h2>Digital wallets</h2>
+        <p>A digital wallet is an app that keeps on your phone what you'd keep in a real wallet. Apple Wallet and Google Wallet are well-known examples.</p>
+        <dl>
+          <dt>Payment cards</dt>
+          <dd>Tap your phone to pay.</dd>
+          <dt>Tickets and passes</dt>
+          <dd>Boarding passes, event tickets and loyalty cards.</dd>
+          <dt>Digital ID</dt>
+          <dd>Driving licences, ID cards and diplomas, where your country or issuer supports them. These are called digital credentials. A trusted issuer, such as a government, signs them so that others can check they're real.</dd>
+        </dl>
+        <p>The useful part is that you approve what gets shared, and you can share only what's needed. For example, you could prove you're over 18 without giving your full identity.</p>
+        <p>The EU requires its member countries to offer citizens an identity wallet by the end of 2026. FIDO began work on wallets in December 2025, and that work is still in progress.</p>
+        <p>A crypto wallet is something else. It holds the keys for cryptocurrency.</p>
+      </section>
+
+      <section>
+        <h2>Passkeys and wallets together</h2>
+        <p>They answer different questions, so one doesn't replace the other.</p>
+        <dl>
+          <dt>A passkey says: "It's me again."</dt>
+          <dd>It proves you own the account, and it tells the site nothing else about you.</dd>
+          <dt>A wallet ID says: "Here's a fact about me, and someone trusted confirms it."</dt>
+          <dd>It proves something like your age or your driving licence.</dd>
+        </dl>
+        <h3>Example: renting a car online</h3>
+        <ol>
+          <li>Sign in to the rental site with a passkey.</li>
+          <li>Prove you can drive with the digital driving licence in your wallet.</li>
+          <li>Pay with the card in your wallet.</li>
+        </ol>
+        <p>On most phones, your passkeys are kept in your password manager, not in the app called Wallet.</p>
+      </section>
+
+      <section>
+        <h2>Learn more</h2>
+        <p>
+          <a href="https://simplewebauthn.dev/" target="_blank" rel="noopener noreferrer">SimpleWebAuthn</a> ·
+          <a href="https://fidoalliance.org/passkeys/" target="_blank" rel="noopener noreferrer">FIDO on passkeys</a> ·
+          <a href="https://passkeys.dev/docs/intro/what-are-passkeys/" target="_blank" rel="noopener noreferrer">passkeys.dev</a> ·
+          <a href="https://fidoalliance.org/fido-alliance-digital-credentials/" target="_blank" rel="noopener noreferrer">FIDO on digital credentials</a> ·
+          <a href="https://digital-strategy.ec.europa.eu/en/policies/eudi-regulation" target="_blank" rel="noopener noreferrer">EU identity wallet</a>
+        </p>
+      </section>
+    </div>
+  </main>
+</body>
+</html>
