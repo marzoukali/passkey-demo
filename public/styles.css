@@ -224,3 +224,33 @@ dd {
 .explained ol {
   font-size: inherit;
 }
+
+.explained th code {
+  white-space: nowrap;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+.table-scroll table {
+  min-width: 680px;
+}
+
+main:has(#panel-flows:not([hidden])) {
+  max-width: 1280px;
+}
+
+#flows-status:empty {
+  display: none;
+}
+
+.diagram {
+  margin: 12px 0 0;
+  overflow-x: auto;
+}
+
+.diagram svg {
+  display: block;
+  margin: 0 auto;
+}

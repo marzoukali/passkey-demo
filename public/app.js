@@ -35,6 +35,81 @@ const refreshState = async () => {
   $('state').textContent = account ? JSON.stringify(account, null, 2) : 'Nothing yet';
 };
 
+const diagrams = [...document.querySelectorAll('.diagram')].map((figure) => ({ figure, source: figure.textContent }));
+const darkMode = matchMedia('(prefers-color-scheme: dark)');
+let diagramsRequested = false;
+let mermaidLoaded;
+
+// Mermaid is a large file, so it loads only when someone opens the Flows tab.
+const loadMermaid = () => {
+  mermaidLoaded ??= new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = '/mermaid.js';
+    script.addEventListener('load', resolve);
+    script.addEventListener('error', reject);
+    document.head.append(script);
+  });
+  return mermaidLoaded;
+};
+
+const diagramTheme = () => {
+  const color = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return {
+    darkMode: darkMode.matches,
+    background: color('--panel'),
+    fontFamily: 'system-ui, sans-serif',
+    fontSize: '13px',
+    primaryColor: color('--code'),
+    primaryTextColor: color('--text'),
+    primaryBorderColor: color('--muted'),
+    secondaryColor: color('--panel'),
+    tertiaryColor: color('--bg'),
+    lineColor: color('--muted'),
+    textColor: color('--text'),
+    clusterBkg: color('--bg'),
+    clusterBorder: color('--line'),
+    edgeLabelBackground: color('--panel'),
+    actorBkg: color('--code'),
+    actorBorder: color('--muted'),
+    actorTextColor: color('--text'),
+    actorLineColor: color('--line'),
+    signalColor: color('--text'),
+    signalTextColor: color('--text'),
+    noteBkgColor: color('--accent'),
+    noteTextColor: color('--accent-text'),
+    noteBorderColor: color('--accent'),
+    sequenceNumberColor: color('--accent-text'),
+  };
+};
+
+const drawDiagrams = async () => {
+  try {
+    await loadMermaid();
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      themeVariables: diagramTheme(),
+      fontFamily: 'system-ui, sans-serif',
+      fontSize: 13,
+      flowchart: { useMaxWidth: false, wrappingWidth: 280 },
+      sequence: { useMaxWidth: false, actorMargin: 20, width: 130, diagramMarginX: 10 },
+    });
+    for (const [index, { figure, source }] of diagrams.entries()) {
+      const { svg } = await mermaid.render(`diagram-${index}`, source);
+      figure.innerHTML = svg;
+    }
+    $('flows-status').textContent = '';
+  } catch (error) {
+    console.error(error);
+    $('flows-status').textContent = 'The diagrams could not be drawn, so their source is shown instead.';
+    for (const source of document.querySelectorAll('.diagram pre')) source.hidden = false;
+  }
+};
+
+darkMode.addEventListener('change', () => {
+  if (diagramsRequested) drawDiagrams();
+});
+
 const tabs = [...document.querySelectorAll('[role="tab"]')];
 
 const selectTab = (selected) => {
@@ -43,6 +118,10 @@ const selectTab = (selected) => {
     tab.setAttribute('aria-selected', isSelected);
     tab.tabIndex = isSelected ? 0 : -1;
     $(tab.getAttribute('aria-controls')).hidden = !isSelected;
+  }
+  if (selected.id === 'tab-flows' && !diagramsRequested) {
+    diagramsRequested = true;
+    drawDiagrams();
   }
 };
 

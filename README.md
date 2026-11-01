@@ -2,13 +2,13 @@
 
 A small web app that shows how passkey sign-in works, built with [SimpleWebAuthn](https://simplewebauthn.dev/).
 
-You can create an account, sign in without a password, try to replay an old sign-in and see exactly what the server stores. The **Explained** tab covers the demo, FIDO, passkeys and digital wallets in plain English.
+You can create an account, sign in without a password, try to replay an old sign-in and see exactly what the server stores. The **Explained** tab covers the demo, FIDO, passkeys, hardware binding and digital wallets in plain English. The **Flows** tab draws the journey from creating an account to signing in, once at a high level and once with every API call.
 
 This is a learning demo, not a base for a production app. See [Limits](#limits).
 
 ## Run it locally
 
-You need Node.js 22 or later.
+You need Node.js 22.12 or later.
 
 ```bash
 npm install
@@ -28,9 +28,23 @@ Then open http://localhost:3456.
 | `HOST` | `localhost` | The address the server listens on. Use `0.0.0.0` on a hosting platform. |
 | `ORIGIN` | `http://localhost:<PORT>` | The public address of the site, such as `https://passkeys.example.com`. Passkeys are tied to this hostname. |
 
+## Why it needs a long-running server
+
+Creating an account or signing in takes two separate requests: one to get a challenge and one to send back the signed answer. The server has to remember the challenge between those requests, and it has to remember the public key until the next sign-in. This demo keeps all of that in the memory of one running Node.js process.
+
+| Held in memory | Kept for | If it is lost |
+| --- | --- | --- |
+| Challenge | 5 minutes, or until it is used | The step in progress fails, and you start it again |
+| Session | About an hour | The page stops showing your account, but your passkey still works |
+| Account and public key | Until the server restarts | The account is gone, and your passkey can no longer sign in |
+
+Serverless hosting doesn't suit this. It can start a fresh copy of the program for each request, so the second request may reach a copy that never saw the first one and has no challenge to check against. Running several instances behind a load balancer has the same problem.
+
+This comes from how the demo is built, not from passkeys. Passkeys only need storage that lasts between requests. A real app would keep accounts in a database and challenges in a shared store, and it could then run on serverless hosting or across many instances.
+
 ## Deploy it
 
-Any host that can run a long-lived Node.js process will work, as long as it meets these rules:
+Any host that can run a long-running Node.js process will work, as long as it meets these rules:
 
 - The site must use HTTPS. Browsers allow passkeys over plain HTTP only on `localhost`.
 - `ORIGIN` must exactly match the address people visit.
@@ -52,6 +66,7 @@ Render's Free instance type sleeps after 15 minutes without traffic, and account
 - Accounts are held in memory and are lost on every restart or deploy.
 - A deployed copy is public. Anyone with the address can create an account, and there is no rate limiting. The demo stops accepting new accounts at 1,000.
 - There is no account recovery, sign-out or protected content. Signing in only proves that the passkey flow works.
+- Creating a passkey and signing in both require user verification, so a security key needs a PIN or fingerprint set up first.
 
 ## Test passkeys
 
@@ -62,6 +77,6 @@ Creating an account saves a real passkey in your password manager or on your sec
 | File | Purpose |
 | --- | --- |
 | `server.js` | Web server, passkey checks and in-memory storage |
-| `public/index.html` | The **Try it** and **Explained** tabs |
-| `public/app.js` | Browser side of the passkey flow, and the tab controls |
+| `public/index.html` | The **Try it**, **Explained** and **Flows** tabs, including the Mermaid source of the diagrams |
+| `public/app.js` | Browser side of the passkey flow, the tab controls and diagram drawing |
 | `public/styles.css` | Page styles, including dark mode |

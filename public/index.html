@@ -19,6 +19,7 @@
     <div class="tabs" role="tablist" aria-label="Demo sections">
       <button id="tab-try" type="button" role="tab" aria-selected="true" aria-controls="panel-try">Try it</button>
       <button id="tab-explained" type="button" role="tab" aria-selected="false" aria-controls="panel-explained" tabindex="-1">Explained</button>
+      <button id="tab-flows" type="button" role="tab" aria-selected="false" aria-controls="panel-flows" tabindex="-1">Flows</button>
     </div>
 
     <div id="panel-try" class="panel" role="tabpanel" aria-labelledby="tab-try">
@@ -56,7 +57,7 @@
 
       <section>
         <h2>What the server stores</h2>
-        <p>Everything it holds about you. If this leaked, there would be no password to crack or reuse.</p>
+        <p>Everything it holds about you. If this leaked, there would be no password to crack or reuse. It lives in the memory of the running server, so a restart wipes it.</p>
         <pre id="state">Nothing yet</pre>
       </section>
 
@@ -76,6 +77,7 @@
           <tbody>
             <tr><th scope="row">FIDO</th><td>The agreed design for locks and keys</td><td>Writes the open rules for signing in without passwords</td></tr>
             <tr><th scope="row">Passkey</th><td>A key that fits only one door</td><td>Proves this account is yours</td></tr>
+            <tr><th scope="row">Hardware binding</th><td>A key sealed inside a chip</td><td>Stops the key being copied</td></tr>
             <tr><th scope="row">Digital wallet</th><td>The wallet in your pocket, on your phone</td><td>Holds your cards, tickets and ID</td></tr>
             <tr><th scope="row">SimpleWebAuthn</th><td>A locksmith's toolkit</td><td>Helps developers add passkeys to a website</td></tr>
           </tbody>
@@ -99,6 +101,24 @@
       </section>
 
       <section>
+        <h2>Why it needs a long-running server</h2>
+        <p>Signing in is a short conversation, not a single message. The server sends a challenge, your device signs it, and the server checks the answer against the challenge it sent. So the server has to remember the challenge between those two messages, and it has to remember your public key until your next visit.</p>
+        <p>This demo keeps all of that in the memory of one program that stays running.</p>
+        <table>
+          <thead>
+            <tr><th scope="col">What it remembers</th><th scope="col">For how long</th><th scope="col">If it's lost</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Challenge</th><td>5 minutes, or until it's used</td><td>The step in progress fails, and you start it again</td></tr>
+            <tr><th scope="row">Session</th><td>About an hour</td><td>The page stops showing your account, but your passkey still works</td></tr>
+            <tr><th scope="row">Account and public key</th><td>Until the server restarts</td><td>The account is gone, and your passkey can't sign in any more</td></tr>
+          </tbody>
+        </table>
+        <p>Serverless hosting doesn't suit this. It can start a fresh copy of the program for each request, so the second message may reach a copy that never saw the first one and has no challenge to check against. Running several copies behind a load balancer has the same problem.</p>
+        <p>This comes from how the demo is built, not from passkeys. Passkeys only need storage that lasts between requests. A real app would keep accounts in a database and challenges in a shared store, and it could then run on serverless hosting or across many servers.</p>
+      </section>
+
+      <section>
         <h2>FIDO</h2>
         <p>FIDO stands for Fast IDentity Online. The FIDO Alliance is a group of companies and organisations that writes shared rules for signing in without passwords. The rules are open and free to use.</p>
         <p>Think of it as an agreed design for locks and keys. Because everyone follows the same design, passkeys work across the major operating systems, browsers and password managers.</p>
@@ -110,6 +130,8 @@
           <dd>How a website talks to your browser. SimpleWebAuthn makes this part easier for developers.</dd>
           <dt>CTAP</dt>
           <dd>How your browser talks to a phone or security key.</dd>
+          <dt>Authenticator</dt>
+          <dd>Whatever holds your keys and signs with them, such as your phone, your laptop, a password manager or a security key.</dd>
         </dl>
       </section>
 
@@ -135,7 +157,55 @@
           <dt>Device-bound</dt>
           <dd>Stays on one device, such as a security key. It offers the strongest protection, but you need a backup plan in case you lose it.</dd>
         </dl>
-        <p>You can see which kind you made in the <code>backedUp</code> field on the Try it tab. <code>true</code> means it's synced.</p>
+        <p>You can see which kind you made in the <code>deviceType</code> field on the Try it tab. <code>multiDevice</code> means it can sync, and <code>singleDevice</code> means it's device-bound. The <code>backedUp</code> field shows whether a synced passkey has been backed up yet.</p>
+      </section>
+
+      <section>
+        <h2>Hardware binding</h2>
+        <p>A key is hardware-bound when it's made inside a secure chip and can't be copied out. The chip does the signing itself, so your apps and even your operating system never see the key. Think of a stamp sealed inside a safe: you pass a document in and it comes back stamped, but the stamp never leaves.</p>
+        <p>The chip might be in a security key, or it might be the Secure Enclave in an Apple device or the TPM in a Windows PC.</p>
+
+        <h3>Two kinds of binding</h3>
+        <p>These are easy to mix up, and they do different jobs.</p>
+        <table>
+          <thead>
+            <tr><th scope="col">Binding</th><th scope="col">Ties the key to</th><th scope="col">Stops</th><th scope="col">Applies to</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Site binding</th><td>One website</td><td>A fake site using your key</td><td>Every passkey</td></tr>
+            <tr><th scope="row">Hardware binding</th><td>One physical device</td><td>Someone copying your key</td><td>Only some passkeys</td></tr>
+          </tbody>
+        </table>
+
+        <h3>How it relates to FIDO</h3>
+        <p>FIDO writes the rules, and they don't require every key to be hardware-bound. Its main promise, protection from phishing, holds with or without hardware binding, because site binding is what provides it.</p>
+        <p>FIDO also tests products. Its certification levels, from L1 to L3+, rate how well an authenticator protects its keys. Software running only on an ordinary operating system can't reach L2, and L3 adds tests against hardware attacks.</p>
+
+        <h3>How it relates to passkeys</h3>
+        <p>The two kinds of passkey differ on exactly this point.</p>
+        <table>
+          <thead>
+            <tr><th scope="col">Question</th><th scope="col">Synced</th><th scope="col">Device-bound</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">Where is the key?</th><td>In your password manager, which copies it to your devices in encrypted form</td><td>In one authenticator, such as a security key</td></tr>
+            <tr><th scope="row">Can it be copied?</th><td>Yes, by design</td><td>No</td></tr>
+            <tr><th scope="row">Is it hardware-bound?</th><td>No, because it has to leave the device to sync</td><td>Yes, if the authenticator keeps it in secure hardware</td></tr>
+            <tr><th scope="row">What if you lose the device?</th><td>Your other devices still have it</td><td>It's gone, so you need a second passkey</td></tr>
+            <tr><th scope="row">Does it stop phishing?</th><td>Yes</td><td>Yes</td></tr>
+          </tbody>
+        </table>
+        <p>Device-bound and hardware-bound aren't quite the same. Device-bound means the passkey can't leave its authenticator. It's also hardware-bound when that authenticator keeps it in a secure chip, as a security key does.</p>
+        <p>Rule-makers draw the same line. For example, the US guidance NIST SP 800-63B accepts synced passkeys at its middle level, AAL2, but its highest level, AAL3, needs a key that can't be exported.</p>
+
+        <h3>How a website can tell</h3>
+        <p>When a passkey is created, the authenticator reports whether it can sync, and the server stores that as <code>deviceType</code>. That's a claim rather than proof. For proof, a site can ask for attestation, which is a signed statement of the authenticator's make and model.</p>
+        <p>This demo doesn't ask. It uses <code>attestationType: 'none'</code>, so it takes the authenticator's word.</p>
+
+        <h3>Why wallets care more</h3>
+        <p>Wallets use the same idea as passkeys: a private key, a fresh challenge and a signature. The stakes are higher, though. A copied passkey opens one account, but copied identity data could be used wherever that identity is accepted.</p>
+        <p>So the EU wallet framework makes hardware binding mandatory for your core identity data, known as PID. It calls this device binding. The issuer puts a public key in the credential, and the matching private key stays in certified secure hardware called a WSCD, which won't release it. To share the credential, the wallet signs a fresh challenge. A thief who copies the credential can't do that, so the copy is useless.</p>
+        <p>A WSCD doesn't have to be in your phone. It can also be a smart card or a secure server called a hardware security module. Other credentials in the wallet don't always need this binding.</p>
       </section>
 
       <section>
@@ -179,8 +249,175 @@
           <a href="https://fidoalliance.org/passkeys/" target="_blank" rel="noopener noreferrer">FIDO on passkeys</a> ·
           <a href="https://passkeys.dev/docs/intro/what-are-passkeys/" target="_blank" rel="noopener noreferrer">passkeys.dev</a> ·
           <a href="https://fidoalliance.org/fido-alliance-digital-credentials/" target="_blank" rel="noopener noreferrer">FIDO on digital credentials</a> ·
-          <a href="https://digital-strategy.ec.europa.eu/en/policies/eudi-regulation" target="_blank" rel="noopener noreferrer">EU identity wallet</a>
+          <a href="https://fidoalliance.org/certification/authenticator-certification-levels/" target="_blank" rel="noopener noreferrer">FIDO certification levels</a> ·
+          <a href="https://pages.nist.gov/800-63-4/sp800-63b.html" target="_blank" rel="noopener noreferrer">NIST SP 800-63B</a> ·
+          <a href="https://digital-strategy.ec.europa.eu/en/policies/eudi-regulation" target="_blank" rel="noopener noreferrer">EU identity wallet</a> ·
+          <a href="https://eudi.dev/latest/main/06-trust-model/" target="_blank" rel="noopener noreferrer">EU wallet framework</a>
         </p>
+      </section>
+    </div>
+
+    <div id="panel-flows" class="panel explained" role="tabpanel" aria-labelledby="tab-flows" hidden>
+      <p id="flows-status" role="status">Drawing the diagrams…</p>
+
+      <section>
+        <h2>High level: from creating an account to signing in</h2>
+        <p>What you do, what your device does and what the server does.</p>
+        <figure class="diagram" tabindex="0" aria-label="High-level flow from creating an account to signing in">
+          <pre hidden>
+flowchart LR
+  accTitle: High-level flow from creating an account to signing in
+  accDescr: You pick a username, the server sends a challenge, your device makes a key pair and the server saves the public key. To sign in, the server sends a new challenge, your device signs it and the server checks the signature.
+
+  subgraph create ["Create an account"]
+    direction TB
+    pick(["You: pick a username"]) --> free{"Name free?"}
+    free -- No --> pick
+    free -- Yes --> challenge["Server: sends a one-time challenge"]
+    challenge --> confirm["You: confirm with your fingerprint, face or PIN"]
+    confirm --> keys["Your device: makes a key pair and keeps the private key"]
+    keys --> send["Your device: sends only the public key to the server"]
+    send --> save["Server: checks the reply and saves the public key"]
+  end
+
+  subgraph signin ["Sign in"]
+    direction TB
+    start(["You: choose Sign in with a passkey"]) --> fresh["Server: sends a new one-time challenge"]
+    fresh --> choose["You: choose your passkey and confirm it"]
+    choose --> sign["Your device: signs the challenge with the private key"]
+    sign --> check{"Signature matches?"}
+    check -- Yes --> done(["You are signed in"])
+    check -- No --> refused(["Sign-in refused"])
+  end
+
+  create --> signin
+</pre>
+        </figure>
+      </section>
+
+      <section>
+        <h2>Low level: every call</h2>
+        <p>Each step from opening the page to signing in, checked against this demo's real traffic. The Server memory column shows what has to last between requests, which is why the demo <a href="#long-running-note">needs a long-running server</a>.</p>
+        <figure class="diagram" tabindex="0" aria-label="Low-level sequence of every call from opening the page to signing in">
+          <pre hidden>
+sequenceDiagram
+  accTitle: Every call from opening the page to signing in
+  accDescr: The page, authenticator, server and server memory exchange messages to open a session, create a passkey, sign in and refuse a replayed sign-in.
+
+  autonumber
+  actor User as You
+  participant Auth as Authenticator&lt;br/&gt;phone, laptop, security key
+  participant Page as Page and browser&lt;br/&gt;app.js, SimpleWebAuthn
+  participant Server as Server&lt;br/&gt;server.js, SimpleWebAuthn
+  participant Memory as Server memory&lt;br/&gt;sessions, accounts
+
+  Note over User,Memory: Open the page
+  Page->>Server: GET /api/state
+  Server->>Memory: No sid cookie, so create a session
+  Server-->>Page: 200 null, Set-Cookie: sid&lt;br/&gt;(HttpOnly, SameSite=Strict)
+
+  Note over User,Memory: Create an account
+  User->>Page: Enters a username,&lt;br/&gt;selects Create passkey
+  Page->>Server: POST /api/register/options&lt;br/&gt;{ username }
+  Server->>Memory: Is the name free?&lt;br/&gt;Are there under 1,000 accounts?
+  Server->>Server: generateRegistrationOptions()&lt;br/&gt;makes a challenge and user ID&lt;br/&gt;
+  Server->>Memory: Save ceremony for 5 minutes&lt;br/&gt;{ type, username, options, expiresAt }
+  Server-->>Page: 200 { challenge, rp, user, timeout,&lt;br/&gt;pubKeyCredParams, attestation,&lt;br/&gt;excludeCredentials, extensions, hints,&lt;br/&gt;authenticatorSelection: {&lt;br/&gt;residentKey: required,&lt;br/&gt;requireResidentKey: true,&lt;br/&gt;userVerification: required } }
+  Page->>Page: startRegistration() calls&lt;br/&gt;navigator.credentials.create()&lt;br/&gt;browser checks rp.id against the address&lt;br/&gt;and writes clientDataJSON&lt;br/&gt;
+  Page->>Auth: Make a credential. This is CTAP&lt;br/&gt;authenticatorMakeCredential&lt;br/&gt;on a phone or security key
+  Auth->>User: Asks for fingerprint, face or PIN
+  User-->>Auth: Confirms
+  Auth->>Auth: Makes a key pair, keeps the&lt;br/&gt;private key with the RP ID and user ID&lt;br/&gt;
+  Auth-->>Page: Credential ID, public key, flags&lt;br/&gt;UP, UV, BE, BS. Never the private key
+  Page->>Server: POST /api/register/verify&lt;br/&gt;{ id, rawId, type,&lt;br/&gt;authenticatorAttachment,&lt;br/&gt;clientExtensionResults, response: {&lt;br/&gt;clientDataJSON, attestationObject,&lt;br/&gt;authenticatorData, publicKey,&lt;br/&gt;publicKeyAlgorithm, transports } }
+  Server->>Memory: Take the ceremony and clear it,&lt;br/&gt;so it works once
+  Server->>Server: verifyRegistrationResponse()&lt;br/&gt;checks challenge, origin, RP ID,&lt;br/&gt;UP and UV flags&lt;br/&gt;
+  Server->>Memory: Is the name still free?
+  Server->>Memory: Save the account&lt;br/&gt;{ username, webauthnUserID, passkeys:&lt;br/&gt;[{ id, publicKey, counter, transports,&lt;br/&gt;deviceType, backedUp }] }
+  Server->>Memory: Link the account to the session
+  Server-->>Page: 200 { verified: true, username }
+  Page->>Server: GET /api/state
+  Server-->>Page: 200 { username, password: null,&lt;br/&gt;webauthnUserID, passkeys }
+  Page-->>User: Passkey created. Now sign in.
+
+  Note over User,Memory: Sign in
+  User->>Page: Selects Sign in with a passkey
+  Page->>Server: POST /api/login/options&lt;br/&gt;{}
+  Server->>Server: generateAuthenticationOptions()&lt;br/&gt;makes a new challenge, leaves&lt;br/&gt;allowCredentials empty&lt;br/&gt;
+  Server->>Memory: Save ceremony for 5 minutes&lt;br/&gt;{ type, challenge, expiresAt }
+  Server-->>Page: 200 { rpId, challenge, timeout,&lt;br/&gt;allowCredentials: [],&lt;br/&gt;userVerification: required }
+  Page->>Page: startAuthentication() calls&lt;br/&gt;navigator.credentials.get()&lt;br/&gt;browser checks rpId against the address&lt;br/&gt;and writes clientDataJSON&lt;br/&gt;
+  Page->>Auth: Sign the challenge. This is CTAP&lt;br/&gt;authenticatorGetAssertion&lt;br/&gt;on a phone or security key
+  Auth->>User: Lists passkeys for this site,&lt;br/&gt;asks for fingerprint, face or PIN
+  User-->>Auth: Chooses one and confirms
+  Auth->>Auth: Signs authenticator data and the&lt;br/&gt;clientDataJSON hash with the private&lt;br/&gt;key, updates its counter&lt;br/&gt;
+  Auth-->>Page: Signature, authenticator data,&lt;br/&gt;user handle
+  Page->>Server: POST /api/login/verify&lt;br/&gt;{ id, rawId, type,&lt;br/&gt;authenticatorAttachment,&lt;br/&gt;clientExtensionResults, response: {&lt;br/&gt;clientDataJSON, authenticatorData,&lt;br/&gt;signature, userHandle } }
+  Server->>Memory: Take the ceremony and clear it,&lt;br/&gt;so it works once
+  Server->>Memory: Find the passkey and public key by id
+  Server->>Server: verifyAuthenticationResponse()&lt;br/&gt;checks challenge, origin, RP ID, UP and&lt;br/&gt;UV flags, counter, and the signature&lt;br/&gt;against the public key&lt;br/&gt;
+  Server->>Memory: Save the new counter,&lt;br/&gt;link the account to the session
+  Server-->>Page: 200 { verified: true, username }
+  Page->>Server: GET /api/state
+  Server-->>Page: 200 { username, password: null,&lt;br/&gt;webauthnUserID, passkeys }
+  Page-->>User: Signed in
+
+  Note over User,Memory: Try to cheat: replay the last sign-in
+  User->>Page: Selects Replay last sign-in
+  Page->>Server: POST /api/login/options&lt;br/&gt;{}
+  Server->>Memory: Save ceremony with a new challenge
+  Server-->>Page: 200 { rpId, challenge, timeout,&lt;br/&gt;allowCredentials: [],&lt;br/&gt;userVerification: required }
+  Page->>Server: POST /api/login/verify&lt;br/&gt;the same body as the last sign-in
+  Server->>Memory: Take the ceremony and clear it,&lt;br/&gt;find the passkey by id
+  Server->>Server: verifyAuthenticationResponse()&lt;br/&gt;fails, because the signed challenge&lt;br/&gt;is the old one&lt;br/&gt;
+  Server-->>Page: 400 { error }
+  Page-->>User: Refused
+</pre>
+        </figure>
+      </section>
+
+      <section>
+        <h2>API calls</h2>
+        <div class="table-scroll" tabindex="0" aria-label="API calls">
+        <table>
+          <thead>
+            <tr><th scope="col">Call</th><th scope="col">Sends</th><th scope="col">Returns</th><th scope="col">Changes in memory</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row"><code>GET /api/state</code></th><td>Nothing</td><td>Your account, or <code>null</code></td><td>Creates a session if the <code>sid</code> cookie is missing or unknown</td></tr>
+            <tr><th scope="row"><code>POST /api/register/options</code></th><td><code>{ username }</code></td><td>Creation options, including the challenge</td><td>Saves the ceremony</td></tr>
+            <tr><th scope="row"><code>POST /api/register/verify</code></th><td>The result of <code>startRegistration()</code></td><td><code>{ verified, username }</code></td><td>Clears the ceremony, saves the account and links it to the session</td></tr>
+            <tr><th scope="row"><code>POST /api/login/options</code></th><td><code>{}</code></td><td>Request options, including the challenge</td><td>Saves the ceremony</td></tr>
+            <tr><th scope="row"><code>POST /api/login/verify</code></th><td>The result of <code>startAuthentication()</code></td><td><code>{ verified, username }</code></td><td>Clears the ceremony, saves the counter and links the account to the session</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <p>Every failed check returns <code>400 { error }</code>. Each browser sends its <code>sid</code> cookie with every call, which is how the server finds that browser's challenge.</p>
+      </section>
+
+      <section id="long-running-note">
+        <h2>Why the memory column matters</h2>
+        <p>Steps that save something to Server memory are read back by a later request. A challenge is saved by one call and needed by the next, and an account is saved during sign-up and needed at every sign-in. If those requests reached different copies of the server, or the server restarted between them, the data wouldn't be there. The Explained tab covers this under "Why it needs a long-running server".</p>
+      </section>
+
+      <section>
+        <h2>Terms in the diagram</h2>
+        <dl>
+          <dt>Ceremony</dt>
+          <dd>The WebAuthn name for one full exchange, either creating a passkey or signing in.</dd>
+          <dt>RP ID</dt>
+          <dd>The site's domain name. RP stands for relying party, which means the website relying on the passkey. This is what site binding ties a passkey to.</dd>
+          <dt>clientDataJSON</dt>
+          <dd>The browser's own note of the challenge and the site address. It's part of what gets signed, so a signature made on a fake site won't pass the checks.</dd>
+          <dt>UP and UV</dt>
+          <dd>Flags from the authenticator. User present means someone was there, and user verified means they passed a fingerprint, face or PIN check. This demo requires both, so a security key needs a PIN or fingerprint set up first.</dd>
+          <dt>BE and BS</dt>
+          <dd>Flags that say whether a passkey can be backed up and whether it has been. The server stores them as <code>deviceType</code> and <code>backedUp</code>.</dd>
+          <dt>User handle</dt>
+          <dd>The user ID saved with the passkey. Together with the credential ID, it lets a passkey say who is signing in, so you don't type a username.</dd>
+          <dt>Counter</dt>
+          <dd>A number the authenticator can raise on each use, which helps reveal a cloned key. Synced passkeys often leave it at 0.</dd>
+        </dl>
       </section>
     </div>
   </main>

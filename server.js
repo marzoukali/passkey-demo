@@ -28,9 +28,10 @@ const sessions = new Map(); // session ID -> { ceremony, username, lastSeen }
 
 const secureCookie = origin.startsWith('https:') ? '; Secure' : '';
 
+// Mermaid writes inline styles into its diagrams, so style-src allows them.
 const securityHeaders = {
   'content-security-policy':
-    "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
+    "default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src data:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",
   'referrer-policy': 'no-referrer',
   'x-content-type-options': 'nosniff',
 };
@@ -43,6 +44,7 @@ const staticFiles = {
     'node_modules/@simplewebauthn/browser/dist/bundle/index.umd.min.js',
     'text/javascript; charset=utf-8',
   ],
+  '/mermaid.js': ['node_modules/mermaid/dist/mermaid.min.js', 'text/javascript; charset=utf-8'],
 };
 
 const getSession = (req, res) => {
@@ -114,12 +116,13 @@ const routes = {
     }
     assertCanRegister(name);
 
+    // The verify functions refuse a response without user verification, so both ceremonies ask for it.
     const options = await generateRegistrationOptions({
       rpName,
       rpID,
       userName: name,
       attestationType: 'none',
-      authenticatorSelection: { residentKey: 'required', userVerification: 'preferred' },
+      authenticatorSelection: { residentKey: 'required', userVerification: 'required' },
     });
     startCeremony(session, { type: 'registration', username: name, options });
     return options;
@@ -160,7 +163,7 @@ const routes = {
     // Empty allowCredentials lets the passkey itself say who is signing in, so no username is typed.
     const options = await generateAuthenticationOptions({
       rpID,
-      userVerification: 'preferred',
+      userVerification: 'required',
       allowCredentials: [],
     });
     startCeremony(session, { type: 'sign-in', challenge: options.challenge });
