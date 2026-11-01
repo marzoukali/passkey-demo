@@ -115,7 +115,7 @@
           </tbody>
         </table>
         <p>Serverless hosting doesn't suit this. It can start a fresh copy of the program for each request, so the second message may reach a copy that never saw the first one and has no challenge to check against. Running several copies behind a load balancer has the same problem.</p>
-        <p>This comes from how the demo is built, not from passkeys. Passkeys only need storage that lasts between requests. A real app would keep accounts in a database and challenges in a shared store, and it could then run on serverless hosting or across many servers.</p>
+        <p>This comes from how the demo is built, not from passkeys. Passkeys only need storage that lasts between requests. A real app would keep accounts in a database and challenges in a shared store, and it could then run on serverless hosting or across many servers. The Flows tab marks where each of these is needed and how to replace it.</p>
       </section>
 
       <section>
@@ -296,84 +296,90 @@ flowchart LR
       </section>
 
       <section>
-        <h2>Low level: every call</h2>
-        <p>Each step from opening the page to signing in, checked against this demo's real traffic. The Server memory column shows what has to last between requests, which is why the demo <a href="#long-running-note">needs a long-running server</a>.</p>
-        <figure class="diagram" tabindex="0" aria-label="Low-level sequence of every call from opening the page to signing in">
+        <h2>Low level: the API calls</h2>
+        <p>The main steps from opening the page to signing in. The notes marked A, B and C show what has to last between requests and what a real app would use instead. The shaded steps are the wait while a challenge sits in memory.</p>
+        <figure class="diagram" tabindex="0" aria-label="Low-level sequence of the API calls from opening the page to signing in">
           <pre hidden>
 sequenceDiagram
-  accTitle: Every call from opening the page to signing in
-  accDescr: The page, authenticator, server and server memory exchange messages to open a session, create a passkey, sign in and refuse a replayed sign-in.
+  accTitle: The API calls from opening the page to signing in
+  accDescr: The page and server open a session, create a passkey and sign in. Notes A, B and C mark the session, challenge and account, which have to last between requests, and what a real app would use for each.
 
   autonumber
-  actor User as You
-  participant Auth as Authenticator&lt;br/&gt;phone, laptop, security key
+  participant Auth as You and your&lt;br/&gt;authenticator
   participant Page as Page and browser&lt;br/&gt;app.js, SimpleWebAuthn
   participant Server as Server&lt;br/&gt;server.js, SimpleWebAuthn
   participant Memory as Server memory&lt;br/&gt;sessions, accounts
 
-  Note over User,Memory: Open the page
+  Note over Auth,Memory: Open the page
   Page->>Server: GET /api/state
-  Server->>Memory: No sid cookie, so create a session
-  Server-->>Page: 200 null, Set-Cookie: sid&lt;br/&gt;(HttpOnly, SameSite=Strict)
+  Server->>Memory: Create a session
+  Note over Server,Memory: Long-running need A&lt;br/&gt;The session lasts about an hour.&lt;br/&gt;Real app: a shared store or a signed cookie
+  Server-->>Page: 200, Set-Cookie: sid
 
-  Note over User,Memory: Create an account
-  User->>Page: Enters a username,&lt;br/&gt;selects Create passkey
+  Note over Auth,Memory: Create an account
+  Auth->>Page: Enters a username,&lt;br/&gt;selects Create passkey
   Page->>Server: POST /api/register/options&lt;br/&gt;{ username }
-  Server->>Memory: Is the name free?&lt;br/&gt;Are there under 1,000 accounts?
-  Server->>Server: generateRegistrationOptions()&lt;br/&gt;makes a challenge and user ID&lt;br/&gt;
-  Server->>Memory: Save ceremony for 5 minutes&lt;br/&gt;{ type, username, options, expiresAt }
-  Server-->>Page: 200 { challenge, rp, user, timeout,&lt;br/&gt;pubKeyCredParams, attestation,&lt;br/&gt;excludeCredentials, extensions, hints,&lt;br/&gt;authenticatorSelection: {&lt;br/&gt;residentKey: required,&lt;br/&gt;requireResidentKey: true,&lt;br/&gt;userVerification: required } }
-  Page->>Page: startRegistration() calls&lt;br/&gt;navigator.credentials.create()&lt;br/&gt;browser checks rp.id against the address&lt;br/&gt;and writes clientDataJSON&lt;br/&gt;
-  Page->>Auth: Make a credential. This is CTAP&lt;br/&gt;authenticatorMakeCredential&lt;br/&gt;on a phone or security key
-  Auth->>User: Asks for fingerprint, face or PIN
-  User-->>Auth: Confirms
-  Auth->>Auth: Makes a key pair, keeps the&lt;br/&gt;private key with the RP ID and user ID&lt;br/&gt;
-  Auth-->>Page: Credential ID, public key, flags&lt;br/&gt;UP, UV, BE, BS. Never the private key
-  Page->>Server: POST /api/register/verify&lt;br/&gt;{ id, rawId, type,&lt;br/&gt;authenticatorAttachment,&lt;br/&gt;clientExtensionResults, response: {&lt;br/&gt;clientDataJSON, attestationObject,&lt;br/&gt;authenticatorData, publicKey,&lt;br/&gt;publicKeyAlgorithm, transports } }
-  Server->>Memory: Take the ceremony and clear it,&lt;br/&gt;so it works once
+  Server->>Memory: Checks the name is free, saves the&lt;br/&gt;challenge from generateRegistrationOptions()
+  rect rgba(127, 127, 127, 0.14)
+    Note over Server,Memory: Long-running need B&lt;br/&gt;The challenge waits for the verify call.&lt;br/&gt;Real app: a shared store with a 5-minute expiry
+    Server-->>Page: 200 creation options, with the challenge&lt;br/&gt;and userVerification: required
+    Page->>Auth: startRegistration() calls&lt;br/&gt;navigator.credentials.create().&lt;br/&gt;The browser checks the RP ID&lt;br/&gt;and writes clientDataJSON
+    Auth->>Auth: You confirm with your fingerprint,&lt;br/&gt;face or PIN. Your device makes a key&lt;br/&gt;pair and keeps the private key&lt;br/&gt;
+    Auth-->>Page: Credential ID, public key and&lt;br/&gt;flags. Never the private key
+    Page->>Server: POST /api/register/verify&lt;br/&gt;{ id, response, ... }
+    Server->>Memory: Takes the challenge and clears it,&lt;br/&gt;so it works once
+  end
   Server->>Server: verifyRegistrationResponse()&lt;br/&gt;checks challenge, origin, RP ID,&lt;br/&gt;UP and UV flags&lt;br/&gt;
-  Server->>Memory: Is the name still free?
-  Server->>Memory: Save the account&lt;br/&gt;{ username, webauthnUserID, passkeys:&lt;br/&gt;[{ id, publicKey, counter, transports,&lt;br/&gt;deviceType, backedUp }] }
-  Server->>Memory: Link the account to the session
-  Server-->>Page: 200 { verified: true, username }
-  Page->>Server: GET /api/state
-  Server-->>Page: 200 { username, password: null,&lt;br/&gt;webauthnUserID, passkeys }
-  Page-->>User: Passkey created. Now sign in.
+  Server->>Memory: Saves the account and public key,&lt;br/&gt;links the account to the session
+  Note over Server,Memory: Long-running need C&lt;br/&gt;The account lasts for every sign-in.&lt;br/&gt;Real app: a database
+  Server-->>Page: 200 { verified, username }
+  Page-->>Auth: Passkey created
 
-  Note over User,Memory: Sign in
-  User->>Page: Selects Sign in with a passkey
+  Note over Auth,Memory: Sign in
+  Auth->>Page: Selects Sign in with a passkey
   Page->>Server: POST /api/login/options&lt;br/&gt;{}
-  Server->>Server: generateAuthenticationOptions()&lt;br/&gt;makes a new challenge, leaves&lt;br/&gt;allowCredentials empty&lt;br/&gt;
-  Server->>Memory: Save ceremony for 5 minutes&lt;br/&gt;{ type, challenge, expiresAt }
-  Server-->>Page: 200 { rpId, challenge, timeout,&lt;br/&gt;allowCredentials: [],&lt;br/&gt;userVerification: required }
-  Page->>Page: startAuthentication() calls&lt;br/&gt;navigator.credentials.get()&lt;br/&gt;browser checks rpId against the address&lt;br/&gt;and writes clientDataJSON&lt;br/&gt;
-  Page->>Auth: Sign the challenge. This is CTAP&lt;br/&gt;authenticatorGetAssertion&lt;br/&gt;on a phone or security key
-  Auth->>User: Lists passkeys for this site,&lt;br/&gt;asks for fingerprint, face or PIN
-  User-->>Auth: Chooses one and confirms
-  Auth->>Auth: Signs authenticator data and the&lt;br/&gt;clientDataJSON hash with the private&lt;br/&gt;key, updates its counter&lt;br/&gt;
-  Auth-->>Page: Signature, authenticator data,&lt;br/&gt;user handle
-  Page->>Server: POST /api/login/verify&lt;br/&gt;{ id, rawId, type,&lt;br/&gt;authenticatorAttachment,&lt;br/&gt;clientExtensionResults, response: {&lt;br/&gt;clientDataJSON, authenticatorData,&lt;br/&gt;signature, userHandle } }
-  Server->>Memory: Take the ceremony and clear it,&lt;br/&gt;so it works once
-  Server->>Memory: Find the passkey and public key by id
-  Server->>Server: verifyAuthenticationResponse()&lt;br/&gt;checks challenge, origin, RP ID, UP and&lt;br/&gt;UV flags, counter, and the signature&lt;br/&gt;against the public key&lt;br/&gt;
-  Server->>Memory: Save the new counter,&lt;br/&gt;link the account to the session
-  Server-->>Page: 200 { verified: true, username }
-  Page->>Server: GET /api/state
-  Server-->>Page: 200 { username, password: null,&lt;br/&gt;webauthnUserID, passkeys }
-  Page-->>User: Signed in
-
-  Note over User,Memory: Try to cheat: replay the last sign-in
-  User->>Page: Selects Replay last sign-in
-  Page->>Server: POST /api/login/options&lt;br/&gt;{}
-  Server->>Memory: Save ceremony with a new challenge
-  Server-->>Page: 200 { rpId, challenge, timeout,&lt;br/&gt;allowCredentials: [],&lt;br/&gt;userVerification: required }
-  Page->>Server: POST /api/login/verify&lt;br/&gt;the same body as the last sign-in
-  Server->>Memory: Take the ceremony and clear it,&lt;br/&gt;find the passkey by id
-  Server->>Server: verifyAuthenticationResponse()&lt;br/&gt;fails, because the signed challenge&lt;br/&gt;is the old one&lt;br/&gt;
-  Server-->>Page: 400 { error }
-  Page-->>User: Refused
+  Server->>Memory: Saves a new challenge from&lt;br/&gt;generateAuthenticationOptions()
+  rect rgba(127, 127, 127, 0.14)
+    Note over Server,Memory: Long-running need B again&lt;br/&gt;This challenge waits for the verify call.
+    Server-->>Page: 200 request options, with the challenge,&lt;br/&gt;allowCredentials: [] and userVerification: required
+    Page->>Auth: startAuthentication() calls&lt;br/&gt;navigator.credentials.get().&lt;br/&gt;The browser checks the RP ID&lt;br/&gt;and writes clientDataJSON
+    Auth->>Auth: You choose a passkey and confirm.&lt;br/&gt;Your device signs the challenge&lt;br/&gt;with the private key&lt;br/&gt;
+    Auth-->>Page: Signature, authenticator data,&lt;br/&gt;user handle
+    Page->>Server: POST /api/login/verify&lt;br/&gt;{ id, response, ... }
+    Server->>Memory: Takes the challenge and clears it,&lt;br/&gt;so it works once
+  end
+  Server->>Memory: Finds the passkey and public key by id
+  Server->>Server: verifyAuthenticationResponse()&lt;br/&gt;checks challenge, origin, RP ID, flags,&lt;br/&gt;counter and the signature&lt;br/&gt;
+  Server->>Memory: Saves the new counter,&lt;br/&gt;links the account to the session
+  Server-->>Page: 200 { verified, username }
+  Page-->>Auth: Signed in
 </pre>
         </figure>
+      </section>
+
+      <section id="long-running-note">
+        <h2>When it needs a long-running server</h2>
+        <p>Only when one request saves something that a later request has to read. That happens three times in this flow, and the demo keeps all three in the memory of one running program. If a later request reached a different copy of the server, or the server restarted first, the data wouldn't be there.</p>
+        <div class="table-scroll" tabindex="0" aria-label="What has to last between requests">
+        <table>
+          <thead>
+            <tr><th scope="col">On the diagram</th><th scope="col">Saved at</th><th scope="col">Read back at</th><th scope="col">In a real app</th></tr>
+          </thead>
+          <tbody>
+            <tr><th scope="row">A. Session</th><td>Step 2</td><td>Every later request, for about an hour</td><td>A shared store such as Redis, or a signed cookie</td></tr>
+            <tr><th scope="row">B. Challenge</th><td>Steps 6 and 19</td><td>Steps 12 and 25, within 5 minutes</td><td>A shared store such as Redis, with a 5-minute expiry</td></tr>
+            <tr><th scope="row">C. Account and public key</th><td>Step 14</td><td>Step 26, and every sign-in after that</td><td>A database such as PostgreSQL</td></tr>
+          </tbody>
+        </table>
+        </div>
+        <h3>How to replace it</h3>
+        <ol>
+          <li>Move accounts and public keys to a database. Make usernames and credential IDs unique there, so two people can't claim the same name at once.</li>
+          <li>Move sessions and challenges to a shared store that expires them by itself. That also removes the cleanup timer in <code>server.js</code>.</li>
+          <li>Read and delete each challenge in one action, so it can only be used once, even if two requests arrive together.</li>
+        </ol>
+        <p>The server then keeps nothing between requests. Any copy can answer any request, so it can run on serverless hosting or across many servers, and a restart or deploy loses nothing.</p>
+        <p>Choose a store where a read always sees the latest write, or step 12 could miss the challenge saved at step 6. A signed cookie can replace the session store, but not the challenge store, because the server couldn't tell whether a challenge had already been used.</p>
       </section>
 
       <section>
@@ -384,35 +390,27 @@ sequenceDiagram
             <tr><th scope="col">Call</th><th scope="col">Sends</th><th scope="col">Returns</th><th scope="col">Changes in memory</th></tr>
           </thead>
           <tbody>
-            <tr><th scope="row"><code>GET /api/state</code></th><td>Nothing</td><td>Your account, or <code>null</code></td><td>Creates a session if the <code>sid</code> cookie is missing or unknown</td></tr>
-            <tr><th scope="row"><code>POST /api/register/options</code></th><td><code>{ username }</code></td><td>Creation options, including the challenge</td><td>Saves the ceremony</td></tr>
-            <tr><th scope="row"><code>POST /api/register/verify</code></th><td>The result of <code>startRegistration()</code></td><td><code>{ verified, username }</code></td><td>Clears the ceremony, saves the account and links it to the session</td></tr>
-            <tr><th scope="row"><code>POST /api/login/options</code></th><td><code>{}</code></td><td>Request options, including the challenge</td><td>Saves the ceremony</td></tr>
-            <tr><th scope="row"><code>POST /api/login/verify</code></th><td>The result of <code>startAuthentication()</code></td><td><code>{ verified, username }</code></td><td>Clears the ceremony, saves the counter and links the account to the session</td></tr>
+            <tr><th scope="row"><code>GET /api/state</code></th><td>Nothing</td><td><code>{ username, password: null, webauthnUserID, passkeys }</code>, or <code>null</code></td><td>Creates a session if the <code>sid</code> cookie is missing or unknown</td></tr>
+            <tr><th scope="row"><code>POST /api/register/options</code></th><td><code>{ username }</code></td><td><code>{ challenge, rp, user, timeout, pubKeyCredParams, attestation, excludeCredentials, authenticatorSelection, extensions, hints }</code></td><td>Saves the challenge, username and options</td></tr>
+            <tr><th scope="row"><code>POST /api/register/verify</code></th><td><code>{ id, rawId, type, authenticatorAttachment, clientExtensionResults, response }</code>, where <code>response</code> holds <code>clientDataJSON, attestationObject, authenticatorData, publicKey, publicKeyAlgorithm, transports</code></td><td><code>{ verified, username }</code></td><td>Clears the challenge, saves the account with its passkey (<code>id, publicKey, counter, transports, deviceType, backedUp</code>) and links it to the session</td></tr>
+            <tr><th scope="row"><code>POST /api/login/options</code></th><td><code>{}</code></td><td><code>{ rpId, challenge, timeout, allowCredentials, userVerification }</code></td><td>Saves the challenge</td></tr>
+            <tr><th scope="row"><code>POST /api/login/verify</code></th><td>The same top-level fields, where <code>response</code> holds <code>clientDataJSON, authenticatorData, signature, userHandle</code></td><td><code>{ verified, username }</code></td><td>Clears the challenge, saves the counter and links the account to the session</td></tr>
           </tbody>
         </table>
         </div>
-        <p>Every failed check returns <code>400 { error }</code>. Each browser sends its <code>sid</code> cookie with every call, which is how the server finds that browser's challenge.</p>
-      </section>
-
-      <section id="long-running-note">
-        <h2>Why the memory column matters</h2>
-        <p>Steps that save something to Server memory are read back by a later request. A challenge is saved by one call and needed by the next, and an account is saved during sign-up and needed at every sign-in. If those requests reached different copies of the server, or the server restarted between them, the data wouldn't be there. The Explained tab covers this under "Why it needs a long-running server".</p>
+        <p>Every failed check returns <code>400 { error }</code>. Each browser sends its <code>sid</code> cookie with every call, which is how the server finds that browser's challenge. The page also calls <code>GET /api/state</code> after steps 15 and 29 to refresh "What the server stores".</p>
+        <p>The Replay button repeats steps 18 and 24 with the old signature. By then the server holds a new challenge, so step 27 fails and the server refuses it.</p>
       </section>
 
       <section>
         <h2>Terms in the diagram</h2>
         <dl>
-          <dt>Ceremony</dt>
-          <dd>The WebAuthn name for one full exchange, either creating a passkey or signing in.</dd>
           <dt>RP ID</dt>
           <dd>The site's domain name. RP stands for relying party, which means the website relying on the passkey. This is what site binding ties a passkey to.</dd>
           <dt>clientDataJSON</dt>
           <dd>The browser's own note of the challenge and the site address. It's part of what gets signed, so a signature made on a fake site won't pass the checks.</dd>
           <dt>UP and UV</dt>
           <dd>Flags from the authenticator. User present means someone was there, and user verified means they passed a fingerprint, face or PIN check. This demo requires both, so a security key needs a PIN or fingerprint set up first.</dd>
-          <dt>BE and BS</dt>
-          <dd>Flags that say whether a passkey can be backed up and whether it has been. The server stores them as <code>deviceType</code> and <code>backedUp</code>.</dd>
           <dt>User handle</dt>
           <dd>The user ID saved with the passkey. Together with the credential ID, it lets a passkey say who is signing in, so you don't type a username.</dd>
           <dt>Counter</dt>

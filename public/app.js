@@ -142,7 +142,7 @@ $('register').addEventListener('submit', async (event) => {
     const optionsJSON = await post('/api/register/options', { username: $('username').value });
     log(`Server created a challenge for "${optionsJSON.user.name}"`);
     const response = await startRegistration({ optionsJSON });
-    log('Your device made a key pair and signed the challenge');
+    log('Your device made a key pair and returned the public key');
     const { username } = await post('/api/register/verify', response);
     log(`Server verified it and saved the public key for "${username}"`);
     showStatus('register-status', 'Passkey created. Now sign in.', 'good');

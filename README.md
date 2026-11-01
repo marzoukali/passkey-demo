@@ -2,7 +2,7 @@
 
 A small web app that shows how passkey sign-in works, built with [SimpleWebAuthn](https://simplewebauthn.dev/).
 
-You can create an account, sign in without a password, try to replay an old sign-in and see exactly what the server stores. The **Explained** tab covers the demo, FIDO, passkeys, hardware binding and digital wallets in plain English. The **Flows** tab draws the journey from creating an account to signing in, once at a high level and once with every API call.
+You can create an account, sign in without a password, try to replay an old sign-in and see exactly what the server stores. The **Explained** tab covers the demo, FIDO, passkeys, hardware binding and digital wallets in plain English. The **Flows** tab draws the journey from creating an account to signing in, once at a high level and once with the API calls, and marks where a long-running server is needed.
 
 This is a learning demo, not a base for a production app. See [Limits](#limits).
 
@@ -32,15 +32,15 @@ Then open http://localhost:3456.
 
 Creating an account or signing in takes two separate requests: one to get a challenge and one to send back the signed answer. The server has to remember the challenge between those requests, and it has to remember the public key until the next sign-in. This demo keeps all of that in the memory of one running Node.js process.
 
-| Held in memory | Kept for | If it is lost |
-| --- | --- | --- |
-| Challenge | 5 minutes, or until it is used | The step in progress fails, and you start it again |
-| Session | About an hour | The page stops showing your account, but your passkey still works |
-| Account and public key | Until the server restarts | The account is gone, and your passkey can no longer sign in |
+| Held in memory | Kept for | If it is lost | In a real app |
+| --- | --- | --- | --- |
+| Challenge | 5 minutes, or until it is used | The step in progress fails, and you start it again | A shared store such as Redis, with a 5-minute expiry |
+| Session | About an hour | The page stops showing your account, but your passkey still works | A shared store such as Redis, or a signed cookie |
+| Account and public key | Until the server restarts | The account is gone, and your passkey can no longer sign in | A database such as PostgreSQL |
 
 Serverless hosting doesn't suit this. It can start a fresh copy of the program for each request, so the second request may reach a copy that never saw the first one and has no challenge to check against. Running several instances behind a load balancer has the same problem.
 
-This comes from how the demo is built, not from passkeys. Passkeys only need storage that lasts between requests. A real app would keep accounts in a database and challenges in a shared store, and it could then run on serverless hosting or across many instances.
+This comes from how the demo is built, not from passkeys. Passkeys only need storage that lasts between requests. With all three moved out of the process, the server keeps nothing between requests, so it could run on serverless hosting or across many instances. Read and delete each challenge in one action, so it can only be used once. The **Flows** tab marks where each of these is needed.
 
 ## Deploy it
 
